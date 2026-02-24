@@ -1,0 +1,16 @@
+# Python and PyCharm
+.idea/
+__pycache__/
+venv/
+.env
+
+# AI and Computer Vision
+*.pt
+*.pth
+*.weights
+*.mp4
+*.avi
+# Conda Environments
+.conda/
+env/
+*env*/
