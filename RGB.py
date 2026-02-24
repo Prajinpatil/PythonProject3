@@ -4,7 +4,6 @@ import torch
 
 
 def rgb_p(frame):
-
     # 1. Early Exit: If the frame is bad, stop immediately.
     if frame is None:
         print("Error: Empty frame passed.")
