@@ -4,7 +4,7 @@ import numpy as np
 
 from RGB import rgb_p
 from IR import ir_p
-
+#trial
 camera=cv2.VideoCapture(0)
 if camera.isOpened():
     print("camera is opened")
