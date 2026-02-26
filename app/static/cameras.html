@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ThreatVision — Cameras</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <script src="/static/ThreatVision.js"></script>
+  <style>
+    .cameras-layout { display: grid; grid-template-columns: 1fr 320px; gap: 20px; }
+
+    .cam-list { display: flex; flex-direction: column; gap: 16px; }
+
+    .cam-card {
+      background: var(--bg-panel);
+      border: 1px solid var(--border-dim);
+      position: relative;
+      overflow: hidden;
+      transition: border-color 0.3s;
+    }
+    .cam-card.threat-high-border { border-color: rgba(255,102,0,0.5); }
+    .cam-card.threat-critical-border { border-color: rgba(255,34,68,0.6); animation: card-pulse 1s infinite; }
+    @keyframes card-pulse {
+      0%,100% { box-shadow: 0 0 0 0 rgba(255,34,68,0.2); }
+      50% { box-shadow: 0 0 0 6px rgba(255,34,68,0); }
+    }
+
+    .cam-card-header {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border-dim);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .cam-card-name {
+      font-family: var(--font-display);
+      font-size: 12px;
+      letter-spacing: 2px;
+      color: var(--text-primary);
+      display: flex; align-items: center; gap: 8px;
+    }
+
+    .cam-card-actions {
+      display: flex; gap: 8px; align-items: center;
+    }
+
+    .cam-feed-area {
+      position: relative;
+      background: #000;
+    }
+
+    .detection-overlay {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+    }
+
+    .cam-stats-bar {
+      padding: 10px 16px;
+      border-top: 1px solid var(--border-dim);
+      display: flex;
+      gap: 20px;
+      align-items: center;
+      background: var(--bg-secondary);
+    }
+
+    .cam-stat { display: flex; flex-direction: column; gap: 2px; }
+    .cam-stat-label { font-family: var(--font-mono); font-size: 8px; color: var(--text-dim); letter-spacing: 1px; }
+    .cam-stat-value { font-family: var(--font-mono); font-size: 12px; color: var(--text-primary); }
+
+    .entities-list {
+      padding: 10px 16px;
+      border-top: 1px solid var(--border-dim);
+      min-height: 36px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-items: center;
+    }
+
+    .entity-chip {
+      font-family: var(--font-mono);
+      font-size: 9px;
+      padding: 3px 8px;
+      background: rgba(0,180,255,0.08);
+      border: 1px solid rgba(0,180,255,0.2);
+      border-radius: 2px;
+      color: var(--accent-cyan);
+      letter-spacing: 1px;
+    }
+
+    /* ADD CAMERA PANEL */
+    .add-cam-panel { }
+    .add-cam-panel .panel-body { display: flex; flex-direction: column; gap: 0; }
+
+    .model-status {
+      padding: 12px 16px;
+      background: rgba(0,180,255,0.05);
+      border: 1px solid rgba(0,180,255,0.15);
+      border-radius: 2px;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .model-status-icon {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--text-dim);
+      flex-shrink: 0;
+    }
+    .model-status-icon.loading { background: var(--accent-amber); animation: pulse-dot 1s infinite; }
+    .model-status-icon.ready { background: var(--accent-green); box-shadow: 0 0 8px var(--accent-green); }
+    .model-status-text { font-family: var(--font-mono); font-size: 10px; color: var(--text-secondary); letter-spacing: 1px; }
+
+    .empty-cams {
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: center; padding: 60px 20px; text-align: center;
+    }
+
+    .threat-summary-block {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-dim);
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+
+    .ts-label { font-family: var(--font-mono); font-size: 9px; color: var(--text-dim); letter-spacing: 2px; margin-bottom: 8px; }
+    .ts-value { font-family: var(--font-display); font-size: 36px; font-weight: 900; color: var(--text-primary); }
+
+    .cam-type-icon { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+
+    /* Loading spinner */
+    .spinner {
+      width: 20px; height: 20px;
+      border: 2px solid rgba(0,180,255,0.1);
+      border-top-color: var(--accent-cyan);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .info-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--border-dim); font-family: var(--font-mono); font-size: 11px; }
+    .info-row:last-child { border-bottom: none; }
+    .info-key { color: var(--text-dim); letter-spacing: 1px; }
+    .info-val { color: var(--text-secondary); }
+  </style>
+</head>
+<body>
+<div class="app-shell">
+  <nav class="sidebar" id="sidebar"></nav>
+
+  <div class="main-content">
+    <div class="page-header">
+      <div>
+        <div class="page-title">CAMERA MANAGEMENT</div>
+        <div class="page-subtitle">LIVE FEED MONITORING & ML ANALYSIS</div>
+      </div>
+      <div class="header-actions">
+        <button class="btn btn-danger btn-sm" onclick="stopAll()">■ STOP ALL</button>
+        <button class="btn btn-primary btn-sm" onclick="showAddForm()">+ ADD CAMERA</button>
+      </div>
+    </div>
+
+    <div class="page-body">
+      <div class="cameras-layout">
+        <!-- LEFT: CAMERA LIST -->
+        <div>
+          <div class="cam-list" id="cam-list">
+            <div class="empty-cams" id="empty-cams">
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" style="opacity:0.15;color:var(--accent-cyan);margin-bottom:16px">
+                <path d="M15 10l4.553-2.069A1 1 0 0121 8.87v6.26a1 1 0 01-1.447.894L15 14M3 8a2 2 0 012-2h10a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z"/>
+              </svg>
+              <div class="empty-state-text" style="margin-bottom:20px">NO CAMERAS REGISTERED</div>
+              <button class="btn btn-primary" onclick="showAddForm()">+ REGISTER CAMERA</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- RIGHT PANEL -->
+        <div style="display:flex;flex-direction:column;gap:16px">
+          <!-- ML MODEL STATUS -->
+          <div class="panel">
+            <div class="panel-header"><span class="panel-title">ML MODEL</span></div>
+            <div class="panel-body">
+              <div class="model-status">
+                <div class="model-status-icon" id="model-icon"></div>
+                <div class="model-status-text" id="model-text">COCO-SSD NOT LOADED</div>
+              </div>
+              <button class="btn btn-primary w-full" id="load-model-btn" onclick="loadModel()">
+                LOAD ML MODEL
+              </button>
+              <div style="margin-top:12px;font-family:var(--font-mono);font-size:9px;color:var(--text-dim);line-height:1.8;letter-spacing:1px">
+                COCO-SSD DETECTS:<br>
+                PERSONS · VEHICLES · BAGS<br>
+                SHARP OBJECTS · ELECTRONICS<br>
+                80+ OBJECT CLASSES
+              </div>
+            </div>
+          </div>
+
+          <!-- SYSTEM THREAT -->
+          <div class="panel">
+            <div class="panel-header"><span class="panel-title">SYSTEM THREAT LEVEL</span></div>
+            <div class="panel-body">
+              <div class="threat-summary-block">
+                <div class="ts-label">AGGREGATE SCORE</div>
+                <div class="ts-value" id="sys-threat-pct">—</div>
+              </div>
+              <div id="sys-threat-badge" style="margin-bottom:12px"></div>
+              <div id="sys-threat-bar"></div>
+            </div>
+          </div>
+
+          <!-- ADD CAMERA FORM -->
+          <div class="panel" id="add-cam-panel" style="display:none">
+            <div class="panel-header">
+              <span class="panel-title">REGISTER CAMERA</span>
+              <button class="btn btn-ghost btn-sm" onclick="hideAddForm()">✕</button>
+            </div>
+            <div class="panel-body">
+              <div class="form-group">
+                <label class="form-label">Camera Name</label>
+                <input type="text" class="form-input" id="cam-name" placeholder="e.g. Front Entrance">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Location</label>
+                <input type="text" class="form-input" id="cam-location" placeholder="e.g. Building A, Floor 1">
+              </div>
+              <button class="btn btn-primary w-full" onclick="addCamera()">REGISTER & ACTIVATE</button>
+            </div>
+          </div>
+
+          <!-- ACTIVE ENTITIES -->
+          <div class="panel">
+            <div class="panel-header"><span class="panel-title">DETECTED ENTITIES</span></div>
+            <div class="panel-body" style="padding:0">
+              <div id="entity-summary" style="padding:16px">
+                <div class="empty-state" style="padding:16px">
+                  <div class="empty-state-text">NO ENTITIES</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/static/ThreatVision.js"></script>
+<script>
+  document.getElementById('sidebar').innerHTML = buildSidebar('cameras');
+
+  function buildSidebar(active) {
+    const alertCount = TV.Alerts.getCount();
+    const pages = [
+      { id:'dashboard', href:'/dashboard', icon:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="nav-icon"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>`, label:'Dashboard' },
+      { id:'cameras', href:'/cameras', icon:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="nav-icon"><path d="M15 10l4.553-2.069A1 1 0 0121 8.87v6.26a1 1 0 01-1.447.894L15 14M3 8a2 2 0 012-2h10a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z"/></svg>`, label:'Cameras' },
+      { id:'events', href:'/events', icon:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="nav-icon"><path d="M13 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>`, label:'Events', badge: alertCount > 0 ? alertCount : null },
+      { id:'analytics', href:'/analytics', icon:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="nav-icon"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>`, label:'Analytics' },
+    ];
+    return `
+      <div class="logo-area">
+        <div class="logo-icon">
+          <svg class="eye-svg" viewBox="0 0 32 32" fill="none">
+            <circle cx="16" cy="16" r="15" stroke="rgba(0,180,255,0.3)" stroke-width="1"/>
+            <path d="M3 16s5-9 13-9 13 9 13 9-5 9-13 9S3 16 3 16z" stroke="var(--accent-cyan)" stroke-width="1.5" fill="none"/>
+            <circle cx="16" cy="16" r="4" fill="var(--accent-cyan)" opacity="0.8"/>
+            <circle cx="16" cy="16" r="2" fill="white"/>
+          </svg>
+          <div><div class="logo-text">THREADVISION</div><div class="logo-sub">SURVEILLANCE SYSTEM</div></div>
+        </div>
+      </div>
+      <div class="system-status"><div class="status-dot"></div><span class="status-label">SYSTEM ONLINE</span></div>
+      <div class="nav-section">
+        <div class="nav-label">NAVIGATION</div>
+        ${pages.map(p => `<a href="${p.href}" class="nav-item ${p.id===active?'active':''}">
+          ${p.icon}${p.label}
+          ${p.badge?`<span class="nav-badge">${p.badge}</span>`:''}
+        </a>`).join('')}
+      </div>
+      <div class="sidebar-footer">
+        <div class="time-display" id="tv-clock">00:00:00</div>
+        <div class="date-display" id="tv-date">—</div>
+      </div>`;
+  }
+
+  // ─── CAMERA RENDERING ────────────────────────────────────────────────────
+  function renderCameras() {
+    const cams = TV.Camera.getAll();
+    const list = document.getElementById('cam-list');
+    const empty = document.getElementById('empty-cams');
+
+    if (cams.length === 0) {
+      empty.style.display = 'flex';
+      return;
+    }
+    empty.style.display = 'none';
+
+    // Remove old cards that don't match
+    const existing = new Set([...list.querySelectorAll('.cam-card')].map(el => el.dataset.id));
+    const current = new Set(cams.map(c => c.id));
+    existing.forEach(id => {
+      if (!current.has(id)) list.querySelector(`[data-id="${id}"]`)?.remove();
+    });
+
+    cams.forEach(cam => {
+      let card = list.querySelector(`[data-id="${cam.id}"]`);
+      if (!card) {
+        card = document.createElement('div');
+        card.className = 'cam-card';
+        card.dataset.id = cam.id;
+        card.innerHTML = buildCamCard(cam);
+        list.appendChild(card);
+        // Attach video stream if online
+        if (cam.status === 'online') attachStream(cam.id);
+      } else {
+        updateCamCard(card, cam);
+      }
+    });
+  }
+
+  function buildCamCard(cam) {
+    return `
+      <div class="cam-card-header">
+        <div class="cam-card-name">
+          <div class="cam-type-icon" style="background:${cam.status==='online'?'var(--accent-green)':'var(--text-dim)'}"></div>
+          ${cam.name.toUpperCase()}
+          <span style="font-family:var(--font-mono);font-size:9px;color:var(--text-dim);font-weight:400">${cam.location || ''}</span>
+        </div>
+        <div class="cam-card-actions">
+          <div id="threat-${cam.id}">${TV.UI.threatBadge(cam.threatScore, cam.threatLabel)}</div>
+          ${cam.status !== 'online'
+            ? `<button class="btn btn-success btn-sm" onclick="startCamera('${cam.id}')">▶ START</button>`
+            : `<button class="btn btn-danger btn-sm" onclick="stopCamera('${cam.id}')">■ STOP</button>`
+          }
+          <button class="btn btn-ghost btn-sm" onclick="removeCamera('${cam.id}')">✕</button>
+        </div>
+      </div>
+      <div class="cam-feed-area">
+        <video id="video-${cam.id}" autoplay playsinline muted style="width:100%;display:block;max-height:360px;object-fit:cover"></video>
+        <canvas id="canvas-${cam.id}" class="detection-overlay" style="pointer-events:none"></canvas>
+        <div class="camera-overlay"></div>
+        <div class="cam-hud-top">
+          <div class="cam-rec" id="rec-${cam.id}" style="display:${cam.status==='online'?'flex':'none'}">
+            <div class="cam-rec-dot"></div>LIVE
+          </div>
+        </div>
+        <div class="cam-hud-bottom">
+          <span class="cam-label">${cam.name.toUpperCase()} // ${cam.id}</span>
+          <span class="cam-label" id="ts-${cam.id}">—</span>
+        </div>
+        <div class="cam-status-offline" id="offline-${cam.id}" style="display:${cam.status!=='online'?'flex':'none'}">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" style="opacity:0.3;color:var(--accent-cyan)">
+            <path d="M15 10l4.553-2.069A1 1 0 0121 8.87v6.26a1 1 0 01-1.447.894L15 14M3 8a2 2 0 012-2h10a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z"/>
+          </svg>
+          FEED OFFLINE
+        </div>
+      </div>
+      <div class="cam-stats-bar">
+        <div class="cam-stat"><div class="cam-stat-label">STATUS</div><div class="cam-stat-value" id="status-${cam.id}">${cam.status.toUpperCase()}</div></div>
+        <div class="cam-stat"><div class="cam-stat-label">DETECTIONS</div><div class="cam-stat-value" id="dcount-${cam.id}">${cam.totalDetections || '—'}</div></div>
+        <div class="cam-stat"><div class="cam-stat-label">LAST SEEN</div><div class="cam-stat-value" id="lastseen-${cam.id}">${TV.UI.formatTime(cam.lastSeen)}</div></div>
+        <div class="cam-stat" style="flex:1"><div class="cam-stat-label">THREAT</div>${TV.UI.threatBar(cam.threatScore)}</div>
+      </div>
+      <div class="entities-list" id="ents-${cam.id}">
+        <span class="text-mono text-xs text-dim">NO ENTITIES DETECTED</span>
+      </div>`;
+  }
+
+  function updateCamCard(card, cam) {
+    // Update threat badge
+    const tb = card.querySelector(`#threat-${cam.id}`);
+    if (tb) tb.innerHTML = TV.UI.threatBadge(cam.threatScore, cam.threatLabel);
+
+    // Update stats
+    const statusEl = card.querySelector(`#status-${cam.id}`);
+    if (statusEl) statusEl.textContent = cam.status.toUpperCase();
+    const dcEl = card.querySelector(`#dcount-${cam.id}`);
+    if (dcEl) dcEl.textContent = cam.totalDetections || '—';
+    const lsEl = card.querySelector(`#lastseen-${cam.id}`);
+    if (lsEl) lsEl.textContent = TV.UI.formatTime(cam.lastSeen);
+    const tsEl = card.querySelector(`#ts-${cam.id}`);
+    if (tsEl) tsEl.textContent = TV.UI.formatTime(cam.lastSeen);
+
+    // Threat bar
+    const tbBar = card.querySelector(`.cam-stats-bar`);
+    if (tbBar) {
+      const barEl = tbBar.querySelector('.threat-meter');
+      if (barEl && cam.threatScore !== null) {
+        const fill = barEl.querySelector('.threat-meter-fill');
+        if (fill) {
+          fill.style.width = (cam.threatScore * 100).toFixed(1) + '%';
+          fill.style.background = TV.Threat.colorForScore(cam.threatScore);
+        }
+      }
+    }
+
+    // Entities
+    const ents = card.querySelector(`#ents-${cam.id}`);
+    if (ents && cam.detectedEntities?.length > 0) {
+      ents.innerHTML = cam.detectedEntities.map(e =>
+        `<span class="entity-chip">${e.label} <span style="color:var(--text-dim)">${(e.confidence*100).toFixed(0)}%</span></span>`
+      ).join('');
+    } else if (ents) {
+      ents.innerHTML = `<span class="text-mono text-xs text-dim">NO ENTITIES DETECTED</span>`;
+    }
+
+    // Online/offline overlays
+    const offEl = card.querySelector(`#offline-${cam.id}`);
+    const recEl = card.querySelector(`#rec-${cam.id}`);
+    if (offEl) offEl.style.display = cam.status !== 'online' ? 'flex' : 'none';
+    if (recEl) recEl.style.display = cam.status === 'online' ? 'flex' : 'none';
+
+    // Threat border
+    card.classList.remove('threat-high-border','threat-critical-border');
+    if (cam.threatScore >= 0.80) card.classList.add('threat-critical-border');
+    else if (cam.threatScore >= 0.60) card.classList.add('threat-high-border');
+  }
+
+  async function attachStream(cameraId) {
+    const video = document.getElementById(`video-${cameraId}`);
+    const canvas = document.getElementById(`canvas-${cameraId}`);
+    if (!video || !canvas) return;
+
+    const stream = TV.Camera.getStream(cameraId);
+    if (!stream) return;
+
+    video.srcObject = stream;
+    await new Promise(r => { video.onloadedmetadata = r; });
+
+    // Start detection if model loaded
+    if (TV.state.modelLoaded) {
+      TV.Detection.startLoop(cameraId, video, canvas);
+    } else {
+      // Watch for model load
+      const check = setInterval(() => {
+        if (TV.state.modelLoaded) {
+          clearInterval(check);
+          TV.Detection.startLoop(cameraId, video, canvas);
+        }
+      }, 500);
+    }
+  }
+
+  // ─── ACTIONS ─────────────────────────────────────────────────────────────
+  async function startCamera(cameraId) {
+    const btn = document.querySelector(`[data-id="${cameraId}"] .btn-success`);
+    if (btn) { btn.disabled = true; btn.textContent = '⏳'; }
+
+    try {
+      await TV.Camera.startStream(cameraId);
+      renderCameras();
+      await attachStream(cameraId);
+    } catch(e) {
+      alert('Webcam access denied or unavailable. Please allow camera permissions.');
+    }
+  }
+
+  function stopCamera(cameraId) {
+    TV.Camera.stopStream(cameraId);
+    const video = document.getElementById(`video-${cameraId}`);
+    if (video) { video.srcObject = null; }
+    const canvas = document.getElementById(`canvas-${cameraId}`);
+    if (canvas) {
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+    renderCameras();
+  }
+
+  function removeCamera(cameraId) {
+    if (!confirm('Remove this camera? Detection history is preserved.')) return;
+    stopCamera(cameraId);
+    TV.Camera.remove(cameraId);
+    document.querySelector(`[data-id="${cameraId}"]`)?.remove();
+    renderCameras();
+  }
+
+  function stopAll() {
+    TV.Camera.getAll().forEach(c => stopCamera(c.id));
+  }
+
+  function showAddForm() {
+    document.getElementById('add-cam-panel').style.display = 'block';
+    document.getElementById('cam-name').focus();
+  }
+
+  function hideAddForm() {
+    document.getElementById('add-cam-panel').style.display = 'none';
+  }
+
+  function addCamera() {
+    const name = document.getElementById('cam-name').value.trim();
+    const location = document.getElementById('cam-location').value.trim();
+    if (!name) { alert('Camera name required'); return; }
+
+    const cam = TV.Camera.add({ name, location });
+    document.getElementById('cam-name').value = '';
+    document.getElementById('cam-location').value = '';
+    hideAddForm();
+
+    renderCameras();
+
+    // Auto-start
+    setTimeout(() => startCamera(cam.id), 100);
+  }
+
+  async function loadModel() {
+    const btn = document.getElementById('load-model-btn');
+    const icon = document.getElementById('model-icon');
+    const text = document.getElementById('model-text');
+
+    btn.disabled = true;
+    btn.textContent = 'LOADING...';
+    icon.className = 'model-status-icon loading';
+    text.textContent = 'LOADING TENSORFLOW.JS...';
+
+    try {
+      await TV.Model.load(msg => { text.textContent = msg.toUpperCase(); });
+      icon.className = 'model-status-icon ready';
+      text.textContent = 'COCO-SSD READY — 80 CLASSES';
+      btn.textContent = '✓ MODEL ACTIVE';
+
+      // Start detection on all running cameras
+      TV.Camera.getAll().filter(c => c.status === 'online').forEach(cam => {
+        const video = document.getElementById(`video-${cam.id}`);
+        const canvas = document.getElementById(`canvas-${cam.id}`);
+        if (video && canvas) TV.Detection.startLoop(cam.id, video, canvas);
+      });
+    } catch(e) {
+      icon.className = 'model-status-icon';
+      text.textContent = 'LOAD FAILED — RETRY';
+      btn.disabled = false;
+      btn.textContent = 'RETRY LOAD';
+    }
+  }
+
+  // ─── SYSTEM THREAT UPDATE ────────────────────────────────────────────────
+  function updateSysThreat() {
+    const t = TV.state.systemThreat;
+    const pctEl = document.getElementById('sys-threat-pct');
+    const badgeEl = document.getElementById('sys-threat-badge');
+    const barEl = document.getElementById('sys-threat-bar');
+    if (pctEl) pctEl.textContent = t > 0 ? (t*100).toFixed(0)+'%' : '—';
+    if (pctEl) pctEl.style.color = TV.Threat.colorForScore(t);
+    if (badgeEl) badgeEl.innerHTML = TV.UI.threatBadge(t);
+    if (barEl) barEl.innerHTML = TV.UI.threatBar(t);
+
+    // Entity summary
+    const ents = document.getElementById('entity-summary');
+    const allEnts = TV.Camera.getAll().flatMap(c => c.detectedEntities || []);
+    if (allEnts.length === 0) {
+      ents.innerHTML = `<div class="empty-state" style="padding:16px"><div class="empty-state-text">NO ENTITIES</div></div>`;
+    } else {
+      const counts = {};
+      allEnts.forEach(e => { counts[e.label] = (counts[e.label]||0)+1; });
+      ents.innerHTML = Object.entries(counts).map(([label,count]) =>
+        `<div class="info-row"><span class="info-key">${label}</span><span class="info-val">${count}×</span></div>`
+      ).join('');
+    }
+  }
+
+  // ─── MODEL STATUS SYNC ───────────────────────────────────────────────────
+  function syncModelStatus() {
+    const icon = document.getElementById('model-icon');
+    const text = document.getElementById('model-text');
+    const btn = document.getElementById('load-model-btn');
+    if (TV.state.modelLoaded) {
+      if(icon) icon.className = 'model-status-icon ready';
+      if(text) text.textContent = 'COCO-SSD READY — 80 CLASSES';
+      if(btn) { btn.textContent = '✓ MODEL ACTIVE'; btn.disabled = true; }
+    }
+  }
+
+  // ─── INIT ─────────────────────────────────────────────────────────────────
+  renderCameras();
+  syncModelStatus();
+
+  // Re-render periodically
+  setInterval(() => {
+    TV.Camera.getAll().forEach(cam => {
+      const card = document.querySelector(`[data-id="${cam.id}"]`);
+      if (card) updateCamCard(card, cam);
+    });
+    updateSysThreat();
+  }, 500);
+
+  // Alert toast
+  document.addEventListener('tv:alert', e => {
+    const a = e.detail;
+    const toast = document.createElement('div');
+    toast.style.cssText = `
+      position:fixed;top:20px;right:20px;z-index:9999;
+      background:var(--bg-panel);border:1px solid rgba(255,34,68,0.5);
+      padding:16px 20px;font-family:var(--font-mono);font-size:11px;
+      color:var(--accent-red);letter-spacing:1px;max-width:300px;
+      box-shadow:0 0 20px rgba(255,34,68,0.2);
+      animation:fadeIn 0.3s ease;
+    `;
+    toast.textContent = `⚠ ALERT: ${a.cameraName} — ${a.threatLabel} THREAT`;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 5000);
+  });
+</script>
+</body>
+</html>

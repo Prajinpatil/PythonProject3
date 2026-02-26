@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ThreatVision — Analytics</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <script src="/static/ThreatVision.js"></script>
+  <style>
+    .analytics-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
+    .analytics-full { margin-bottom: 20px; }
+
+    .chart-wrap {
+      position: relative;
+      padding: 16px;
+    }
+
+    .bar-chart {
+      display: flex;
+      align-items: flex-end;
+      gap: 6px;
+      height: 120px;
+    }
+
+    .bar-col {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      height: 100%;
+      justify-content: flex-end;
+    }
+
+    .bar-fill {
+      width: 100%;
+      border-radius: 2px 2px 0 0;
+      transition: height 0.8s ease;
+      min-height: 2px;
+    }
+
+    .bar-label {
+      font-family: var(--font-mono);
+      font-size: 8px;
+      color: var(--text-dim);
+      letter-spacing: 0.5px;
+      white-space: nowrap;
+    }
+
+    .donut-wrap {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 24px;
+      padding: 16px;
+    }
+
+    .legend { display: flex; flex-direction: column; gap: 8px; }
+    .legend-item { display: flex; align-items: center; gap: 8px; font-family: var(--font-mono); font-size: 10px; color: var(--text-secondary); }
+    .legend-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+
+    .metric-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 20px; }
+    .metric-block {
+      background: var(--bg-panel);
+      border: 1px solid var(--border-dim);
+      padding: 20px;
+      position: relative;
+      overflow: hidden;
+    }
+    .metric-block::before {
+      content: '';
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      height: 2px;
+      background: var(--accent-color, var(--accent-cyan));
+      opacity: 0.5;
+    }
+    .metric-val { font-family: var(--font-display); font-size: 32px; font-weight: 900; color: var(--text-primary); }
+    .metric-label { font-family: var(--font-mono); font-size: 9px; color: var(--text-dim); letter-spacing: 2px; margin-top: 6px; }
+    .metric-sub { font-family: var(--font-mono); font-size: 10px; margin-top: 8px; }
+
+    .timeline-wrap { padding: 16px; overflow: hidden; }
+    .timeline-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 8px;
+      font-family: var(--font-mono);
+      font-size: 10px;
+    }
+    .timeline-time { width: 60px; color: var(--text-dim); flex-shrink: 0; }
+    .timeline-bar-wrap { flex: 1; height: 12px; background: var(--bg-primary); border-radius: 2px; overflow: hidden; }
+    .timeline-fill { height: 100%; border-radius: 2px; }
+    .timeline-count { width: 30px; text-align: right; color: var(--text-secondary); }
+
+    .table-wrap { overflow-x: auto; }
+    .heat-cell {
+      width: 24px; height: 24px;
+      border-radius: 2px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-family: var(--font-mono);
+      font-size: 8px;
+      cursor: default;
+      transition: transform 0.2s;
+    }
+    .heat-cell:hover { transform: scale(1.5); z-index: 1; }
+
+    .model-info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .model-info-item { padding: 10px; background: var(--bg-secondary); border: 1px solid var(--border-dim); }
+    .model-info-key { font-family: var(--font-mono); font-size: 8px; color: var(--text-dim); letter-spacing: 1px; }
+    .model-info-val { font-family: var(--font-mono); font-size: 12px; color: var(--text-secondary); margin-top: 4px; }
+  </style>
+</head>
+<body>
+<div class="app-shell">
+  <nav class="sidebar" id="sidebar"></nav>
+  <div class="main-content">
+    <div class="page-header">
+      <div>
+        <div class="page-title">THREAT ANALYTICS</div>
+        <div class="page-subtitle">INTELLIGENCE ANALYSIS & PATTERN DETECTION</div>
+      </div>
+      <div class="header-actions">
+        <span class="text-mono text-xs text-dim" id="analysis-time">—</span>
+      </div>
+    </div>
+
+    <div class="page-body">
+      <!-- METRICS ROW -->
+      <div class="metric-row">
+        <div class="metric-block" style="--accent-color:var(--accent-cyan)">
+          <div class="metric-val" id="m-detections">—</div>
+          <div class="metric-label">TOTAL DETECTIONS</div>
+          <div class="metric-sub text-dim" id="m-det-rate">— per hour</div>
+        </div>
+        <div class="metric-block" style="--accent-color:var(--accent-amber)">
+          <div class="metric-val" id="m-threat-avg">—</div>
+          <div class="metric-label">AVG THREAT SCORE</div>
+          <div class="metric-sub" id="m-threat-trend">—</div>
+        </div>
+        <div class="metric-block" style="--accent-color:var(--accent-red)">
+          <div class="metric-val" id="m-incidents">—</div>
+          <div class="metric-label">HIGH+ INCIDENTS</div>
+          <div class="metric-sub text-dim" id="m-incident-rate">— of total</div>
+        </div>
+      </div>
+
+      <!-- CHARTS ROW 1 -->
+      <div class="analytics-grid">
+        <!-- Threat Distribution -->
+        <div class="panel">
+          <div class="panel-header"><span class="panel-title">THREAT LEVEL DISTRIBUTION</span></div>
+          <div class="chart-wrap">
+            <div class="donut-wrap">
+              <svg width="120" height="120" viewBox="0 0 120 120" id="donut-svg">
+                <circle cx="60" cy="60" r="44" fill="none" stroke="rgba(0,180,255,0.05)" stroke-width="18"/>
+                <!-- arcs injected by JS -->
+              </svg>
+              <div class="legend" id="donut-legend"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Entity Types -->
+        <div class="panel">
+          <div class="panel-header"><span class="panel-title">ENTITY CLASS FREQUENCY</span></div>
+          <div class="chart-wrap">
+            <div class="bar-chart" id="entity-bar-chart">
+              <div style="width:100%;display:flex;align-items:center;justify-content:center;color:var(--text-dim);font-family:var(--font-mono);font-size:10px">NO DATA</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TIMELINE -->
+      <div class="panel analytics-full">
+        <div class="panel-header"><span class="panel-title">ACTIVITY TIMELINE (RECENT 12 PERIODS)</span></div>
+        <div class="timeline-wrap" id="timeline-wrap">
+          <div class="empty-state"><div class="empty-state-text">NO TIMELINE DATA</div></div>
+        </div>
+      </div>
+
+      <!-- CHARTS ROW 2 -->
+      <div class="analytics-grid">
+        <!-- Camera Performance -->
+        <div class="panel">
+          <div class="panel-header"><span class="panel-title">CAMERA PERFORMANCE</span></div>
+          <div class="panel-body" id="cam-performance">
+            <div class="empty-state"><div class="empty-state-text">NO CAMERAS</div></div>
+          </div>
+        </div>
+
+        <!-- ML Model Info -->
+        <div class="panel">
+          <div class="panel-header"><span class="panel-title">ML MODEL INTELLIGENCE</span></div>
+          <div class="panel-body">
+            <div class="model-info-grid">
+              <div class="model-info-item">
+                <div class="model-info-key">MODEL</div>
+                <div class="model-info-val">COCO-SSD</div>
+              </div>
+              <div class="model-info-item">
+                <div class="model-info-key">BACKBONE</div>
+                <div class="model-info-val">MobileNet V2</div>
+              </div>
+              <div class="model-info-item">
+                <div class="model-info-key">CLASSES</div>
+                <div class="model-info-val">80</div>
+              </div>
+              <div class="model-info-item">
+                <div class="model-info-key">STATUS</div>
+                <div class="model-info-val" id="ai-status">—</div>
+              </div>
+              <div class="model-info-item">
+                <div class="model-info-key">FRAMEWORK</div>
+                <div class="model-info-val">TensorFlow.js</div>
+              </div>
+              <div class="model-info-item">
+                <div class="model-info-key">INFERENCE</div>
+                <div class="model-info-val">~200ms</div>
+              </div>
+            </div>
+            <div style="margin-top:16px">
+              <div class="form-label" style="margin-bottom:8px">THREAT SCORING WEIGHTS</div>
+              ${Object.entries(TV.ENTITY_THREAT_MAP)
+                .filter(([k]) => k !== 'default')
+                .map(([key, val]) => `
+                  <div style="margin-bottom:6px">
+                    <div style="display:flex;justify-content:space-between;font-family:var(--font-mono);font-size:9px;margin-bottom:3px">
+                      <span style="color:var(--text-dim)">${val.label}</span>
+                      <span style="color:${TV.Threat.colorForScore(val.base)}">${(val.base*100).toFixed(0)}%</span>
+                    </div>
+                    <div class="confidence-bar">
+                      <div class="confidence-fill" style="width:${val.base*100}%;background:${TV.Threat.colorForScore(val.base)}"></div>
+                    </div>
+                  </div>
+                `).join('')}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/static/ThreatVision.js"></script>
+<script>
+  document.getElementById('sidebar').innerHTML = buildSidebar('analytics');
+
+  function buildSidebar(active) {
+    const alertCount = TV.Alerts.getCount();
+    const pages = [
+      { id:'dashboard', href:'/dashboard', icon:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="nav-icon"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>`, label:'Dashboard' },
+      { id:'cameras', href:'/cameras', icon:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="nav-icon"><path d="M15 10l4.553-2.069A1 1 0 0121 8.87v6.26a1 1 0 01-1.447.894L15 14M3 8a2 2 0 012-2h10a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z"/></svg>`, label:'Cameras' },
+      { id:'events', href:'/events', icon:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="nav-icon"><path d="M13 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>`, label:'Events', badge: alertCount > 0 ? alertCount : null },
+      { id:'analytics', href:'/analytics', icon:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="nav-icon"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>`, label:'Analytics' },
+    ];
+    return `
+      <div class="logo-area">
+        <div class="logo-icon">
+          <svg class="eye-svg" viewBox="0 0 32 32" fill="none">
+            <circle cx="16" cy="16" r="15" stroke="rgba(0,180,255,0.3)" stroke-width="1"/>
+            <path d="M3 16s5-9 13-9 13 9 13 9-5 9-13 9S3 16 3 16z" stroke="var(--accent-cyan)" stroke-width="1.5" fill="none"/>
+            <circle cx="16" cy="16" r="4" fill="var(--accent-cyan)" opacity="0.8"/>
+            <circle cx="16" cy="16" r="2" fill="white"/>
+          </svg>
+          <div><div class="logo-text">THREADVISION</div><div class="logo-sub">SURVEILLANCE SYSTEM</div></div>
+        </div>
+      </div>
+      <div class="system-status"><div class="status-dot"></div><span class="status-label">SYSTEM ONLINE</span></div>
+      <div class="nav-section">
+        <div class="nav-label">NAVIGATION</div>
+        ${pages.map(p => `<a href="${p.href}" class="nav-item ${p.id===active?'active':''}">
+          ${p.icon}${p.label}
+          ${p.badge?`<span class="nav-badge">${p.badge}</span>`:''}
+        </a>`).join('')}
+      </div>
+      <div class="sidebar-footer">
+        <div class="time-display" id="tv-clock">00:00:00</div>
+        <div class="date-display" id="tv-date">—</div>
+      </div>`;
+  }
+
+  function renderAnalytics() {
+    const logs = TV.state.detectionLog;
+    const cameras = TV.Camera.getAll();
+
+    // Metrics
+    const total = logs.length;
+    const avgThreat = total > 0
+      ? (logs.reduce((s, l) => s + l.threatScore, 0) / total)
+      : 0;
+    const highPlus = logs.filter(l => l.threatScore >= 0.6).length;
+
+    document.getElementById('m-detections').textContent = total || '—';
+    document.getElementById('m-threat-avg').textContent = total > 0 ? (avgThreat * 100).toFixed(0) + '%' : '—';
+    document.getElementById('m-threat-avg').style.color = TV.Threat.colorForScore(avgThreat);
+    document.getElementById('m-incidents').textContent = highPlus || '—';
+    document.getElementById('m-incident-rate').textContent = total > 0 ? `${(highPlus/total*100).toFixed(0)}% of total` : '—';
+    document.getElementById('ai-status').textContent = TV.state.modelLoaded ? 'ACTIVE' : 'STANDBY';
+    document.getElementById('analysis-time').textContent = 'LAST ANALYSIS: ' + new Date().toLocaleTimeString('en-US',{hour12:false});
+
+    // Threat distribution donut
+    if (total > 0) {
+      const dist = { NONE:0, LOW:0, MEDIUM:0, HIGH:0, CRITICAL:0 };
+      logs.forEach(l => { dist[l.threatLabel] = (dist[l.threatLabel]||0) + 1; });
+      renderDonut(dist, total);
+    }
+
+    // Entity bar chart
+    const allEntities = logs.flatMap(l => l.entities);
+    const counts = {};
+    allEntities.forEach(e => { counts[e] = (counts[e]||0) + 1; });
+    const sorted = Object.entries(counts).sort((a,b)=>b[1]-a[1]).slice(0,8);
+    const maxCount = sorted[0]?.[1] || 1;
+
+    const barchart = document.getElementById('entity-bar-chart');
+    if (sorted.length === 0) {
+      barchart.innerHTML = `<div style="width:100%;display:flex;align-items:center;justify-content:center;color:var(--text-dim);font-family:var(--font-mono);font-size:10px">NO DATA</div>`;
+    } else {
+      barchart.innerHTML = sorted.map(([label, count]) => {
+        const pct = (count / maxCount * 100).toFixed(0);
+        const color = TV.Threat.colorForScore(count / maxCount * 0.6);
+        return `<div class="bar-col">
+          <div class="bar-fill" style="height:${pct}%;background:${color};opacity:0.8"></div>
+          <div class="bar-label">${label.replace(/ /g,'\n').slice(0,10)}</div>
+        </div>`;
+      }).join('');
+    }
+
+    // Timeline (bucket by 5-min windows)
+    const now = Date.now();
+    const buckets = Array.from({length:12}, (_,i) => ({
+      time: new Date(now - (11-i) * 5 * 60000),
+      count: 0,
+    }));
+    logs.forEach(l => {
+      const t = new Date(l.timestamp).getTime();
+      const idx = 11 - Math.floor((now - t) / (5 * 60000));
+      if (idx >= 0 && idx < 12) buckets[idx].count++;
+    });
+    const maxB = Math.max(...buckets.map(b=>b.count), 1);
+    const timelineWrap = document.getElementById('timeline-wrap');
+    if (logs.length === 0) {
+      timelineWrap.innerHTML = `<div class="empty-state"><div class="empty-state-text">NO TIMELINE DATA</div></div>`;
+    } else {
+      timelineWrap.innerHTML = buckets.map(b => {
+        const pct = (b.count / maxB * 100).toFixed(0);
+        const color = TV.Threat.colorForScore(b.count / maxB * 0.7);
+        return `<div class="timeline-row">
+          <div class="timeline-time">${b.time.toLocaleTimeString('en-US',{hour12:false,hour:'2-digit',minute:'2-digit'})}</div>
+          <div class="timeline-bar-wrap">
+            <div class="timeline-fill" style="width:${pct}%;background:${color}"></div>
+          </div>
+          <div class="timeline-count">${b.count || ''}</div>
+        </div>`;
+      }).join('');
+    }
+
+    // Camera performance table
+    const cp = document.getElementById('cam-performance');
+    if (cameras.length === 0) {
+      cp.innerHTML = `<div class="empty-state"><div class="empty-state-text">NO CAMERAS</div></div>`;
+    } else {
+      cp.innerHTML = `<table class="data-table">
+        <thead><tr>
+          <th>CAMERA</th><th>STATUS</th><th>DETECTIONS</th><th>THREAT</th>
+        </tr></thead>
+        <tbody>${cameras.map(c => `<tr>
+          <td>${c.name}</td>
+          <td><span style="color:${c.status==='online'?'var(--accent-green)':'var(--text-dim)'};font-size:10px">${c.status.toUpperCase()}</span></td>
+          <td>${c.totalDetections || '—'}</td>
+          <td>${TV.UI.threatBadge(c.threatScore, c.threatLabel)}</td>
+        </tr>`).join('')}</tbody>
+      </table>`;
+    }
+  }
+
+  function renderDonut(dist, total) {
+    const colors = {
+      NONE: '#00ff88',
+      LOW: '#44ccff',
+      MEDIUM: '#ffaa00',
+      HIGH: '#ff6600',
+      CRITICAL: '#ff2244',
+    };
+
+    const svg = document.getElementById('donut-svg');
+    const legend = document.getElementById('donut-legend');
+    const r = 44, cx = 60, cy = 60;
+    const circumference = 2 * Math.PI * r;
+
+    let arcs = '';
+    let offset = 0;
+    const entries = Object.entries(dist).filter(([,v])=>v>0);
+
+    entries.forEach(([label, count]) => {
+      const frac = count / total;
+      const dashLen = frac * circumference;
+      const rotation = (offset / circumference) * 360 - 90;
+      arcs += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none"
+        stroke="${colors[label]}" stroke-width="18"
+        stroke-dasharray="${dashLen} ${circumference - dashLen}"
+        stroke-dashoffset="0"
+        transform="rotate(${rotation} ${cx} ${cy})"
+        opacity="0.85"
+      />`;
+      offset += dashLen;
+    });
+
+    svg.innerHTML = `
+      <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="rgba(0,180,255,0.05)" stroke-width="18"/>
+      ${arcs}
+      <text x="${cx}" y="${cy-4}" text-anchor="middle" font-family="'Orbitron',sans-serif" font-size="14" fill="#c8e6ff" font-weight="900">${total}</text>
+      <text x="${cx}" y="${cy+14}" text-anchor="middle" font-family="'Share Tech Mono',monospace" font-size="7" fill="rgba(90,138,170,0.8)" letter-spacing="1">EVENTS</text>
+    `;
+
+    legend.innerHTML = entries.map(([label, count]) => `
+      <div class="legend-item">
+        <div class="legend-dot" style="background:${colors[label]}"></div>
+        <span>${label}: ${count}</span>
+      </div>
+    `).join('');
+  }
+
+  renderAnalytics();
+  setInterval(renderAnalytics, 3000);
+</script>
+</body>
+</html>

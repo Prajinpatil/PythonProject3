@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ThreatVision Demo</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: #0d0d1a;
+    color: #e0e0e0;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    min-height: 100vh;
+  }
+
+  header {
+    background: linear-gradient(90deg, #1a1a2e, #16213e);
+    padding: 16px 28px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    border-bottom: 1px solid #ffffff11;
+  }
+  header h1 { font-size: 20px; letter-spacing: 2px; color: #ff6b6b; }
+  header span { font-size: 12px; color: #888; }
+
+  .main {
+    display: grid;
+    grid-template-columns: 1fr 320px;
+    gap: 20px;
+    padding: 24px;
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+
+  /* ── Video ── */
+  .video-wrap {
+    position: relative;
+    background: #000;
+    border-radius: 12px;
+    overflow: hidden;
+    aspect-ratio: 16/9;
+  }
+  #feed {
+    width: 100%; height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+  #overlay {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    pointer-events: none;
+  }
+  .video-controls {
+    margin-top: 12px;
+    display: flex;
+    gap: 10px;
+  }
+  .btn {
+    padding: 9px 22px;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 600;
+    transition: opacity .15s;
+  }
+  .btn:hover { opacity: .85; }
+  .btn-start  { background: #2a9d8f; color: #fff; }
+  .btn-stop   { background: #e63946; color: #fff; }
+  .btn-snap   { background: #4361ee; color: #fff; }
+
+  /* ── Sidebar ── */
+  .sidebar { display: flex; flex-direction: column; gap: 16px; }
+
+  .card {
+    background: #1a1a2e;
+    border-radius: 12px;
+    padding: 16px;
+    border: 1px solid #ffffff0d;
+  }
+  .card h3 {
+    font-size: 13px;
+    letter-spacing: 1px;
+    color: #888;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+    border-bottom: 1px solid #ffffff11;
+    padding-bottom: 8px;
+  }
+
+  /* Rules editor */
+  .rule-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+    gap: 8px;
+  }
+  .rule-row label {
+    font-size: 12px;
+    color: #aaa;
+    flex: 1;
+  }
+  .rule-row input[type=range] {
+    flex: 1.2;
+    accent-color: #4361ee;
+  }
+  .rule-val {
+    width: 36px;
+    text-align: right;
+    font-size: 12px;
+    color: #ffd166;
+  }
+  .rule-save-btn {
+    width: 100%;
+    padding: 8px;
+    border: none;
+    border-radius: 6px;
+    background: #4361ee;
+    color: #fff;
+    cursor: pointer;
+    font-size: 13px;
+    margin-top: 6px;
+  }
+
+  /* Live log */
+  #log-list {
+    list-style: none;
+    max-height: 200px;
+    overflow-y: auto;
+    font-size: 11px;
+    color: #666;
+  }
+  #log-list li { padding: 3px 0; border-bottom: 1px solid #ffffff07; }
+  #log-list li.threat { color: #ff6b6b; }
+  #log-list li.safe   { color: #2a9d8f; }
+
+  /* Stats */
+  #stats-body { font-size: 12px; color: #aaa; line-height: 1.8; }
+  #stats-body b { color: #ffd166; }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>🔴 THREATVISION</h1>
+    <span>AI-powered detection · humans · animals · birds</span>
+  </div>
+</header>
+
+<div class="main">
+
+  <!-- Left: video feed -->
+  <div>
+    <div class="video-wrap">
+      <video id="feed" autoplay muted playsinline></video>
+      <canvas id="overlay"></canvas>
+    </div>
+    <div class="video-controls">
+      <button class="btn btn-start" id="btnStart">▶ Start Detection</button>
+      <button class="btn btn-stop"  id="btnStop" disabled>⏹ Stop</button>
+      <button class="btn btn-snap"  id="btnSnap">📸 Snapshot</button>
+    </div>
+  </div>
+
+  <!-- Right: sidebar -->
+  <div class="sidebar">
+
+    <!-- Threat rules editor -->
+    <div class="card">
+      <h3>⚙ Threat Rules</h3>
+
+      <div class="rule-row">
+        <label>Alert Threshold</label>
+        <input type="range" id="rAlert" min="0" max="1" step="0.05" value="0.55">
+        <span class="rule-val" id="vAlert">0.55</span>
+      </div>
+
+      <div class="rule-row">
+        <label>Person Base Score</label>
+        <input type="range" id="rPerson" min="0" max="1" step="0.05" value="0.6">
+        <span class="rule-val" id="vPerson">0.60</span>
+      </div>
+
+      <div class="rule-row">
+        <label>Motion Weight</label>
+        <input type="range" id="rMotion" min="0" max="0.5" step="0.05" value="0.25">
+        <span class="rule-val" id="vMotion">0.25</span>
+      </div>
+
+      <div class="rule-row">
+        <label>Night Boost</label>
+        <input type="range" id="rNight" min="0" max="0.3" step="0.05" value="0.10">
+        <span class="rule-val" id="vNight">0.10</span>
+      </div>
+
+      <button class="rule-save-btn" id="btnSaveRules">💾 Save Rules</button>
+    </div>
+
+    <!-- Live event log -->
+    <div class="card">
+      <h3>📋 Event Log</h3>
+      <ul id="log-list"></ul>
+    </div>
+
+    <!-- Stats -->
+    <div class="card">
+      <h3>📊 Learning Stats</h3>
+      <div id="stats-body">Loading…</div>
+      <button class="rule-save-btn" id="btnRefreshStats" style="background:#555">↻ Refresh</button>
+    </div>
+
+  </div>
+</div>
+
+<!-- ThreatVision JS widget -->
+<script src="/static/ThreatVision.js"></script>
+<script>
+// ── init ThreatVision ────────────────────────────────────────────────────────
+const tv = new ThreatVision({
+  videoEl:  document.getElementById('feed'),
+  canvasEl: document.getElementById('overlay'),
+  apiBase:  '/threat',
+  fps:      4,
+
+  onAlert(alerts) {
+    alerts.forEach(a => addLog(`⚠ THREAT: ${a.label} (${(a.threat_score*100).toFixed(0)}%) – ${a.reason}`, 'threat'));
+  },
+
+  onDetect(data) {
+    if (data.detections.length > 0 && !data.alerts.length) {
+      const labels = data.detections.map(d => d.label).join(', ');
+      addLog(`Detected: ${labels}`, 'safe');
+    }
+  },
+});
+
+// ── buttons ──────────────────────────────────────────────────────────────────
+document.getElementById('btnStart').onclick = async () => {
+  await tv.start();
+  document.getElementById('btnStart').disabled = true;
+  document.getElementById('btnStop').disabled  = false;
+};
+
+document.getElementById('btnStop').onclick = () => {
+  tv.stop();
+  document.getElementById('btnStart').disabled = false;
+  document.getElementById('btnStop').disabled  = true;
+};
+
+document.getElementById('btnSnap').onclick = () => {
+  const b64 = tv._captureFrame();
+  const a   = document.createElement('a');
+  a.href    = b64;
+  a.download = `snapshot_${Date.now()}.jpg`;
+  a.click();
+};
+
+// ── rules sliders ─────────────────────────────────────────────────────────────
+const sliders = [
+  { id:'rAlert',  val:'vAlert',  key:'alert_threshold' },
+  { id:'rPerson', val:'vPerson', key:'person_base_score' },
+  { id:'rMotion', val:'vMotion', key:'motion_weight' },
+  { id:'rNight',  val:'vNight',  key:'night_weight' },
+];
+
+sliders.forEach(({ id, val }) => {
+  const inp = document.getElementById(id);
+  const out = document.getElementById(val);
+  inp.oninput = () => out.textContent = parseFloat(inp.value).toFixed(2);
+});
+
+document.getElementById('btnSaveRules').onclick = async () => {
+  for (const { id, key } of sliders) {
+    const value = parseFloat(document.getElementById(id).value);
+    await fetch('/threat/rules', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ key, value }),
+    });
+  }
+  addLog('Rules saved ✓', 'safe');
+};
+
+// ── load existing rules ───────────────────────────────────────────────────────
+async function loadRules() {
+  try {
+    const r = await fetch('/threat/rules').then(r => r.json());
+    document.getElementById('rAlert').value  = r.alert_threshold     ?? 0.55;
+    document.getElementById('rPerson').value = r.person_base_score   ?? 0.6;
+    document.getElementById('rMotion').value = r.motion_weight       ?? 0.25;
+    document.getElementById('rNight').value  = r.night_weight        ?? 0.10;
+    sliders.forEach(({ id, val }) => {
+      document.getElementById(val).textContent =
+        parseFloat(document.getElementById(id).value).toFixed(2);
+    });
+  } catch (_) {}
+}
+
+// ── stats ─────────────────────────────────────────────────────────────────────
+async function loadStats() {
+  try {
+    const s = await fetch('/threat/stats').then(r => r.json());
+    const el = document.getElementById('stats-body');
+    const biases = Object.entries(s.learned_biases || {})
+      .map(([k,v]) => `${k}: <b>${v > 0 ? '+' : ''}${v.toFixed(3)}</b>`)
+      .join('<br>') || 'No data yet';
+
+    el.innerHTML = `
+      Total feedback: <b>${s.total_feedback}</b><br>
+      Known safe: <b>${(s.known_safe_labels || []).join(', ') || 'none'}</b><br>
+      <br>Learned biases:<br>${biases}
+    `;
+  } catch (_) {
+    document.getElementById('stats-body').textContent = 'Could not load';
+  }
+}
+
+document.getElementById('btnRefreshStats').onclick = loadStats;
+
+// ── event log ─────────────────────────────────────────────────────────────────
+function addLog(msg, cls = '') {
+  const list = document.getElementById('log-list');
+  const li   = document.createElement('li');
+  li.className = cls;
+  li.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+  list.prepend(li);
+  // keep last 50 entries
+  while (list.children.length > 50) list.lastChild.remove();
+}
+
+// ── on load ───────────────────────────────────────────────────────────────────
+loadRules();
+loadStats();
+</script>
+
+</body>
+</html>

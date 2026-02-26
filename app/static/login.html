@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ThreatVision — Authenticate</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <script src="/static/ThreatVision.js"></script>
+  <style>
+    .bg-grid {
+      position: fixed; inset: 0; z-index: 0;
+      background-image:
+        linear-gradient(rgba(0,180,255,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,180,255,0.03) 1px, transparent 1px);
+      background-size: 40px 40px;
+    }
+    .login-page { position: relative; z-index: 1; }
+
+    .scan-line {
+      position: fixed; top: 0; left: 0; right: 0; height: 2px;
+      background: linear-gradient(90deg, transparent, var(--accent-cyan), transparent);
+      animation: scan-v 6s linear infinite;
+      z-index: 2;
+    }
+    @keyframes scan-v {
+      0% { top: 0%; opacity: 0; }
+      10% { opacity: 1; }
+      90% { opacity: 1; }
+      100% { top: 100%; opacity: 0; }
+    }
+
+    .login-error {
+      background: rgba(255,34,68,0.08);
+      border: 1px solid rgba(255,34,68,0.3);
+      border-radius: 2px;
+      padding: 10px 14px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--accent-red);
+      letter-spacing: 1px;
+      margin-bottom: 20px;
+      display: none;
+    }
+
+    .eye-ring {
+      width: 64px; height: 64px;
+      border: 2px solid rgba(0,180,255,0.3);
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      margin: 0 auto 20px;
+      position: relative;
+      animation: ring-pulse 3s ease-in-out infinite;
+    }
+    @keyframes ring-pulse {
+      0%,100% { box-shadow: 0 0 0 0 rgba(0,180,255,0.3); }
+      50% { box-shadow: 0 0 0 12px rgba(0,180,255,0); }
+    }
+    .eye-ring::before {
+      content: '';
+      position: absolute;
+      width: 12px; height: 12px;
+      background: var(--accent-cyan);
+      border-radius: 50%;
+      box-shadow: 0 0 12px var(--accent-cyan);
+    }
+
+    .submit-btn {
+      width: 100%;
+      padding: 14px;
+      text-align: center;
+      font-size: 13px;
+      letter-spacing: 4px;
+      margin-top: 24px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .submit-btn::before {
+      content: '';
+      position: absolute;
+      top: 0; left: -100%;
+      width: 100%; height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(0,180,255,0.1), transparent);
+      animation: sweep 2s linear infinite;
+    }
+    @keyframes sweep {
+      to { left: 100%; }
+    }
+
+    .divider {
+      border: none;
+      border-top: 1px solid var(--border-dim);
+      margin: 24px 0;
+    }
+
+    .corner-info {
+      position: fixed;
+      font-family: var(--font-mono);
+      font-size: 9px;
+      color: var(--text-dim);
+      letter-spacing: 1px;
+    }
+    .corner-info.tl { top: 16px; left: 16px; }
+    .corner-info.tr { top: 16px; right: 16px; }
+    .corner-info.bl { bottom: 16px; left: 16px; }
+    .corner-info.br { bottom: 16px; right: 16px; }
+  </style>
+</head>
+<body>
+  <div class="bg-grid"></div>
+  <div class="scan-line"></div>
+
+  <div class="corner-info tl">SYS // THREADVISION-2.1</div>
+  <div class="corner-info tr" id="tv-clock">00:00:00</div>
+  <div class="corner-info bl">ENDPOINT // AUTH-GATE</div>
+  <div class="corner-info br">ENCRYPTED CHANNEL</div>
+
+  <div class="login-page">
+    <div class="login-box">
+      <div class="login-logo">
+        <div class="eye-ring">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="color:var(--accent-cyan)">
+            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+            <circle cx="12" cy="12" r="3"/>
+          </svg>
+        </div>
+        <div class="login-title">THREADVISION</div>
+        <div class="login-version">SURVEILLANCE INTELLIGENCE PLATFORM v2.1</div>
+      </div>
+
+      <div class="login-error" id="login-error">ACCESS DENIED — INVALID CREDENTIALS</div>
+
+      <div class="form-group">
+        <label class="form-label">Operator ID</label>
+        <input type="text" class="form-input" id="username" placeholder="" autocomplete="off" spellcheck="false">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Access Code</label>
+        <input type="password" class="form-input" id="password" placeholder="" autocomplete="off">
+      </div>
+
+      <button class="btn btn-primary submit-btn" onclick="handleLogin()">
+        AUTHENTICATE
+      </button>
+
+      <hr class="divider">
+
+      <div style="text-align:center; font-family:var(--font-mono); font-size:9px; color:var(--text-dim); letter-spacing:2px;">
+        AUTHORIZED PERSONNEL ONLY<br>
+        ALL ACCESS IS MONITORED AND LOGGED
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/ThreatVision.js"></script>
+  <script>
+    // Update clock
+    setInterval(() => {
+      const el = document.getElementById('tv-clock');
+      if(el) el.textContent = new Date().toLocaleTimeString('en-US', {hour12:false});
+    }, 1000);
+
+    function handleLogin() {
+      const user = document.getElementById('username').value.trim();
+      const pass = document.getElementById('password').value.trim();
+
+      if (!user || !pass) {
+        document.getElementById('login-error').style.display = 'block';
+        document.getElementById('login-error').textContent = 'CREDENTIALS REQUIRED — ENTER OPERATOR ID AND ACCESS CODE';
+        return;
+      }
+
+      // Store session (backend handles real auth)
+      sessionStorage.setItem('tv_operator', user);
+      sessionStorage.setItem('tv_auth', 'true');
+
+      // Forward to dashboard
+      window.location.href = '/dashboard';
+    }
+
+    // Enter key support
+    document.addEventListener('keydown', e => {
+      if(e.key === 'Enter') handleLogin();
+    });
+
+    // Check if already authed
+    if (sessionStorage.getItem('tv_auth') === 'true') {
+      window.location.href = '/dashboard';
+    }
+  </script>
+</body>
+</html>

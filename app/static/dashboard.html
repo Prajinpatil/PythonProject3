@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ThreatVision — Dashboard</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <script src="/static/ThreatVision.js"></script>
+  <style>
+    .stats-row { display: grid; grid-template-columns: repeat(4,1fr); gap: 16px; margin-bottom: 24px; }
+    .stat-card {
+      background: var(--bg-panel);
+      border: 1px solid var(--border-dim);
+      padding: 20px;
+      position: relative;
+      overflow: hidden;
+    }
+    .stat-card::after {
+      content: '';
+      position: absolute;
+      bottom: 0; left: 0;
+      height: 2px; width: 100%;
+      background: var(--accent-color, var(--accent-cyan));
+      transform: scaleX(0);
+      transform-origin: left;
+      animation: bar-grow 1s ease forwards;
+    }
+    @keyframes bar-grow { to { transform: scaleX(1); } }
+
+    .threat-gauge-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+    .gauge-ring {
+      position: relative;
+      width: 140px; height: 140px;
+    }
+    .gauge-ring svg { transform: rotate(-90deg); }
+    .gauge-ring .gauge-label {
+      position: absolute;
+      inset: 0;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      transform: none;
+    }
+    .gauge-score {
+      font-family: var(--font-display);
+      font-size: 28px;
+      font-weight: 900;
+    }
+    .gauge-text {
+      font-family: var(--font-mono);
+      font-size: 9px;
+      letter-spacing: 2px;
+      color: var(--text-dim);
+    }
+
+    .two-col { display: grid; grid-template-columns: 1fr 340px; gap: 16px; }
+    .feed-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 24px; }
+
+    .cam-thumb {
+      background: var(--bg-panel);
+      border: 1px solid var(--border-dim);
+      padding: 12px;
+      cursor: pointer;
+      transition: border-color 0.2s;
+    }
+    .cam-thumb:hover { border-color: rgba(0,180,255,0.3); }
+    .cam-thumb-label {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--text-secondary);
+      letter-spacing: 1px;
+      margin-top: 8px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .recent-events { }
+    .event-item {
+      padding: 12px 0;
+      border-bottom: 1px solid var(--border-dim);
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .event-item:last-child { border-bottom: none; }
+    .event-time { font-family: var(--font-mono); font-size: 10px; color: var(--text-dim); }
+    .event-desc { font-family: var(--font-ui); font-size: 13px; color: var(--text-secondary); }
+
+    .system-panel {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .sys-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--border-dim);
+      font-family: var(--font-mono);
+      font-size: 11px;
+    }
+    .sys-row:last-child { border-bottom: none; }
+    .sys-key { color: var(--text-dim); letter-spacing: 1px; }
+    .sys-val { color: var(--text-primary); }
+  </style>
+</head>
+<body>
+<div class="app-shell">
+  <!-- SIDEBAR -->
+  <nav class="sidebar" id="sidebar"></nav>
+
+  <!-- MAIN -->
+  <div class="main-content">
+    <div class="page-header">
+      <div>
+        <div class="page-title">COMMAND OVERVIEW</div>
+        <div class="page-subtitle">REAL-TIME SURVEILLANCE DASHBOARD</div>
+      </div>
+      <div class="header-actions">
+        <div id="system-threat-badge"></div>
+        <span class="text-mono text-xs text-dim" id="last-update">—</span>
+      </div>
+    </div>
+
+    <div class="page-body">
+      <!-- STATS ROW -->
+      <div class="stats-row" id="stats-row">
+        <div class="stat-card" style="--accent-color:var(--accent-cyan)">
+          <div class="stat-value" id="stat-cameras">—</div>
+          <div class="stat-label">CAMERAS ONLINE</div>
+        </div>
+        <div class="stat-card" style="--accent-color:var(--accent-green)">
+          <div class="stat-value" id="stat-entities">—</div>
+          <div class="stat-label">ENTITIES DETECTED</div>
+        </div>
+        <div class="stat-card" style="--accent-color:var(--accent-amber)">
+          <div class="stat-value" id="stat-alerts">—</div>
+          <div class="stat-label">ACTIVE ALERTS</div>
+        </div>
+        <div class="stat-card" style="--accent-color:var(--accent-red)">
+          <div class="stat-value" id="stat-logs">—</div>
+          <div class="stat-label">LOG ENTRIES</div>
+        </div>
+      </div>
+
+      <!-- MAIN GRID -->
+      <div class="two-col">
+        <div>
+          <!-- CAMERA THUMBS -->
+          <div class="panel mb-20">
+            <div class="panel-header">
+              <span class="panel-title">CAMERA FEEDS</span>
+              <a href="/cameras" class="btn btn-ghost btn-sm">MANAGE →</a>
+            </div>
+            <div class="panel-body">
+              <div class="feed-grid" id="feed-grid">
+                <div class="empty-state" style="grid-column:1/-1">
+                  <div class="empty-state-text">NO CAMERAS CONFIGURED</div>
+                  <a href="/cameras" class="btn btn-primary btn-sm" style="margin-top:16px">+ ADD CAMERA</a>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- RECENT DETECTIONS -->
+          <div class="panel">
+            <div class="panel-header">
+              <span class="panel-title">RECENT DETECTIONS</span>
+              <a href="/events" class="btn btn-ghost btn-sm">VIEW ALL →</a>
+            </div>
+            <div class="panel-body">
+              <div id="recent-detections">
+                <div class="empty-state">
+                  <div class="empty-state-text">AWAITING DETECTION DATA</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- RIGHT COLUMN -->
+        <div class="system-panel">
+          <!-- THREAT GAUGE -->
+          <div class="panel">
+            <div class="panel-header">
+              <span class="panel-title">SYSTEM THREAT</span>
+            </div>
+            <div class="panel-body threat-gauge-wrap">
+              <div class="gauge-ring">
+                <svg viewBox="0 0 140 140" width="140" height="140">
+                  <circle cx="70" cy="70" r="58" fill="none" stroke="rgba(0,180,255,0.1)" stroke-width="8"/>
+                  <circle id="gauge-arc" cx="70" cy="70" r="58" fill="none" stroke="var(--accent-green)"
+                    stroke-width="8" stroke-dasharray="364" stroke-dashoffset="364"
+                    stroke-linecap="round" style="transition:all 1s ease"/>
+                </svg>
+                <div class="gauge-label">
+                  <div class="gauge-score" id="gauge-pct">—</div>
+                  <div class="gauge-text">THREAT LEVEL</div>
+                </div>
+              </div>
+              <div style="margin-top:16px" id="gauge-badge"></div>
+            </div>
+          </div>
+
+          <!-- SYSTEM INFO -->
+          <div class="panel">
+            <div class="panel-header"><span class="panel-title">SYSTEM STATUS</span></div>
+            <div class="panel-body">
+              <div class="sys-row">
+                <span class="sys-key">ML MODEL</span>
+                <span class="sys-val" id="sys-model">UNLOADED</span>
+              </div>
+              <div class="sys-row">
+                <span class="sys-key">OPERATOR</span>
+                <span class="sys-val" id="sys-operator">—</span>
+              </div>
+              <div class="sys-row">
+                <span class="sys-key">SESSION</span>
+                <span class="sys-val" id="sys-uptime">—</span>
+              </div>
+              <div class="sys-row">
+                <span class="sys-key">TOTAL LOGS</span>
+                <span class="sys-val" id="sys-logs">—</span>
+              </div>
+              <div class="sys-row">
+                <span class="sys-key">CAMERAS</span>
+                <span class="sys-val" id="sys-cams">—</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- ALERTS SUMMARY -->
+          <div class="panel">
+            <div class="panel-header">
+              <span class="panel-title">ACTIVE ALERTS</span>
+              <a href="/events" class="btn btn-ghost btn-sm">REVIEW →</a>
+            </div>
+            <div class="panel-body">
+              <div id="alert-summary">
+                <div class="empty-state" style="padding:24px">
+                  <div class="empty-state-text">ALL CLEAR</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/static/ThreatVision.js"></script>
+<script>
+  // ─── SIDEBAR ──────────────────────────────────────────────────────────────
+  document.getElementById('sidebar').innerHTML = buildSidebar('dashboard');
+
+  function buildSidebar(active) {
+    const alertCount = TV.Alerts.getCount();
+    const pages = [
+      { id:'dashboard', href:'/dashboard', icon:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="nav-icon"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>`, label:'Dashboard' },
+      { id:'cameras', href:'/cameras', icon:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="nav-icon"><path d="M15 10l4.553-2.069A1 1 0 0121 8.87v6.26a1 1 0 01-1.447.894L15 14M3 8a2 2 0 012-2h10a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z"/></svg>`, label:'Cameras' },
+      { id:'events', href:'/events', icon:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="nav-icon"><path d="M13 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>`, label:'Events', badge: alertCount > 0 ? alertCount : null },
+      { id:'analytics', href:'/analytics', icon:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="nav-icon"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>`, label:'Analytics' },
+    ];
+
+    return `
+      <div class="logo-area">
+        <div class="logo-icon">
+          <svg class="eye-svg" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="16" cy="16" r="15" stroke="rgba(0,180,255,0.3)" stroke-width="1"/>
+            <path d="M3 16s5-9 13-9 13 9 13 9-5 9-13 9S3 16 3 16z" stroke="var(--accent-cyan)" stroke-width="1.5" fill="none"/>
+            <circle cx="16" cy="16" r="4" fill="var(--accent-cyan)" opacity="0.8"/>
+            <circle cx="16" cy="16" r="2" fill="white"/>
+          </svg>
+          <div>
+            <div class="logo-text">THREADVISION</div>
+            <div class="logo-sub">SURVEILLANCE SYSTEM</div>
+          </div>
+        </div>
+      </div>
+      <div class="system-status">
+        <div class="status-dot" id="sys-dot"></div>
+        <span class="status-label">SYSTEM ONLINE</span>
+      </div>
+      <div class="nav-section">
+        <div class="nav-label">NAVIGATION</div>
+        ${pages.map(p => `
+          <a href="${p.href}" class="nav-item ${p.id === active ? 'active' : ''}">
+            ${p.icon}
+            ${p.label}
+            ${p.badge ? `<span class="nav-badge">${p.badge}</span>` : ''}
+          </a>
+        `).join('')}
+      </div>
+      <div class="sidebar-footer">
+        <div class="time-display" id="tv-clock">00:00:00</div>
+        <div class="date-display" id="tv-date">—</div>
+      </div>
+    `;
+  }
+
+  // ─── DASHBOARD LOGIC ──────────────────────────────────────────────────────
+  const sessionStart = Date.now();
+
+  function updateDashboard() {
+    const cameras = TV.Camera.getAll();
+    const online = cameras.filter(c => c.status === 'online');
+    const logs = TV.state.detectionLog;
+    const alerts = TV.Alerts.getUnacked();
+
+    // Stats
+    document.getElementById('stat-cameras').textContent = `${online.length}/${cameras.length}`;
+    const totalEntities = cameras.reduce((s,c) => s + (c.totalDetections || 0), 0);
+    document.getElementById('stat-entities').textContent = totalEntities || '—';
+    document.getElementById('stat-alerts').textContent = alerts.length || '—';
+    document.getElementById('stat-logs').textContent = logs.length || '—';
+
+    // System panel
+    document.getElementById('sys-operator').textContent = sessionStorage.getItem('tv_operator') || '—';
+    const uptime = Math.floor((Date.now() - sessionStart) / 1000);
+    const mins = Math.floor(uptime / 60), secs = uptime % 60;
+    document.getElementById('sys-uptime').textContent = `${String(mins).padStart(2,'0')}:${String(secs).padStart(2,'0')}`;
+    document.getElementById('sys-logs').textContent = logs.length;
+    document.getElementById('sys-cams').textContent = `${cameras.length} REGISTERED`;
+    document.getElementById('sys-model').textContent = TV.state.modelLoaded ? 'COCO-SSD ACTIVE' : (TV.state.modelLoading ? 'LOADING...' : 'STANDBY');
+
+    // Gauge
+    const threat = TV.state.systemThreat;
+    const arc = document.getElementById('gauge-arc');
+    const circumference = 364;
+    const offset = circumference - (threat * circumference);
+    arc.style.strokeDashoffset = offset;
+    arc.style.stroke = TV.Threat.colorForScore(threat);
+    document.getElementById('gauge-pct').textContent = threat > 0 ? (threat * 100).toFixed(0) + '%' : '—';
+    document.getElementById('gauge-badge').innerHTML = TV.UI.threatBadge(threat);
+
+    // System threat badge
+    document.getElementById('system-threat-badge').innerHTML = TV.UI.threatBadge(threat);
+
+    // Feed grid
+    const grid = document.getElementById('feed-grid');
+    if (cameras.length === 0) {
+      grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1">
+        <div class="empty-state-text">NO CAMERAS CONFIGURED</div>
+        <a href="/cameras" class="btn btn-primary btn-sm" style="margin-top:16px">+ ADD CAMERA</a>
+      </div>`;
+    } else {
+      grid.innerHTML = cameras.map(cam => {
+        const ts = cam.threatScore;
+        return `<div class="cam-thumb" onclick="window.location='/cameras'">
+          <div style="background:#000;height:80px;border-radius:2px;display:flex;align-items:center;justify-content:center;border:1px solid var(--border-dim)">
+            <span class="text-mono text-xs" style="color:${cam.status==='online'?'var(--accent-green)':'var(--text-dim)'}">
+              ${cam.status === 'online' ? '● LIVE' : '○ OFFLINE'}
+            </span>
+          </div>
+          <div class="cam-thumb-label">
+            <span>${cam.name}</span>
+            ${TV.UI.threatBadge(ts, cam.threatLabel)}
+          </div>
+          ${TV.UI.threatBar(ts)}
+        </div>`;
+      }).join('');
+    }
+
+    // Recent detections
+    const rd = document.getElementById('recent-detections');
+    const recent = logs.slice(-8).reverse();
+    if (recent.length === 0) {
+      rd.innerHTML = `<div class="empty-state"><div class="empty-state-text">AWAITING DETECTION DATA</div></div>`;
+    } else {
+      rd.innerHTML = recent.map(e => `
+        <div class="event-item">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <span class="event-time">${TV.UI.formatDateTime(e.timestamp)}</span>
+            ${TV.UI.threatBadge(e.threatScore, e.threatLabel)}
+          </div>
+          <div class="event-desc">${e.cameraName} — ${e.entities.join(', ')}</div>
+        </div>
+      `).join('');
+    }
+
+    // Alert summary
+    const as = document.getElementById('alert-summary');
+    if (alerts.length === 0) {
+      as.innerHTML = `<div class="empty-state" style="padding:24px"><div class="empty-state-text">ALL CLEAR</div></div>`;
+    } else {
+      as.innerHTML = alerts.slice(0,5).map(a => `
+        <div class="event-item">
+          <div style="display:flex;justify-content:space-between">
+            <span class="event-time">${TV.UI.formatTime(a.timestamp)}</span>
+            ${TV.UI.threatBadge(a.threatScore, a.threatLabel)}
+          </div>
+          <div class="event-desc" style="font-size:12px">${a.cameraName}</div>
+        </div>
+      `).join('');
+    }
+
+    // Last update
+    document.getElementById('last-update').textContent = 'UPDATED ' + new Date().toLocaleTimeString('en-US',{hour12:false});
+  }
+
+  updateDashboard();
+  setInterval(updateDashboard, 2000);
+  setInterval(() => {
+    const el = document.getElementById('sys-uptime');
+    if (el) {
+      const uptime = Math.floor((Date.now() - sessionStart) / 1000);
+      const mins = Math.floor(uptime / 60), secs = uptime % 60;
+      el.textContent = `${String(mins).padStart(2,'0')}:${String(secs).padStart(2,'0')}`;
+    }
+  }, 1000);
+</script>
+</body>
+</html>

@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ThreatVision — Events</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <script src="/static/ThreatVision.js"></script>
+  <style>
+    .events-layout { display: grid; grid-template-columns: 1fr 300px; gap: 20px; }
+    .tab-bar { display: flex; gap: 0; border-bottom: 1px solid var(--border-dim); margin-bottom: 20px; }
+    .tab {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      letter-spacing: 2px;
+      padding: 10px 20px;
+      cursor: pointer;
+      color: var(--text-dim);
+      border-bottom: 2px solid transparent;
+      transition: all 0.2s;
+    }
+    .tab:hover { color: var(--text-secondary); }
+    .tab.active { color: var(--accent-cyan); border-bottom-color: var(--accent-cyan); }
+
+    .log-entry {
+      display: grid;
+      grid-template-columns: 140px 120px 100px 1fr auto;
+      gap: 12px;
+      align-items: center;
+      padding: 12px 16px;
+      border-bottom: 1px solid rgba(0,180,255,0.05);
+      font-family: var(--font-mono);
+      font-size: 11px;
+      transition: background 0.15s;
+    }
+    .log-entry:hover { background: rgba(0,180,255,0.03); }
+    .log-entry.high-threat { background: rgba(255,34,68,0.03); }
+    .log-entry.critical-threat { background: rgba(255,34,68,0.06); border-left: 2px solid rgba(255,34,68,0.4); }
+
+    .log-header {
+      display: grid;
+      grid-template-columns: 140px 120px 100px 1fr auto;
+      gap: 12px;
+      padding: 8px 16px;
+      border-bottom: 1px solid var(--border-dim);
+      font-family: var(--font-mono);
+      font-size: 9px;
+      color: var(--text-dim);
+      letter-spacing: 2px;
+    }
+
+    .alert-card {
+      background: var(--bg-card);
+      border: 1px solid rgba(255,34,68,0.2);
+      padding: 14px 16px;
+      margin-bottom: 10px;
+      position: relative;
+    }
+    .alert-card.acked { border-color: var(--border-dim); opacity: 0.5; }
+
+    .alert-meta { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+    .alert-time { font-family: var(--font-mono); font-size: 10px; color: var(--text-dim); }
+    .alert-cam { font-family: var(--font-ui); font-size: 13px; color: var(--text-secondary); margin: 4px 0; }
+    .alert-entities { font-family: var(--font-mono); font-size: 10px; color: var(--text-dim); margin-top: 6px; }
+
+    .filter-bar {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+
+    .filter-chip {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      letter-spacing: 1px;
+      padding: 5px 12px;
+      border: 1px solid var(--border-dim);
+      border-radius: 2px;
+      cursor: pointer;
+      color: var(--text-dim);
+      transition: all 0.2s;
+    }
+    .filter-chip:hover, .filter-chip.active { border-color: var(--accent-cyan); color: var(--accent-cyan); }
+
+    .stats-mini { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px; }
+    .mini-stat {
+      background: var(--bg-card);
+      border: 1px solid var(--border-dim);
+      padding: 12px;
+      text-align: center;
+    }
+    .mini-stat-val { font-family: var(--font-display); font-size: 22px; font-weight: 700; }
+    .mini-stat-lbl { font-family: var(--font-mono); font-size: 8px; color: var(--text-dim); letter-spacing: 1px; margin-top: 4px; }
+
+    .export-row { display: flex; gap: 8px; margin-bottom: 16px; }
+
+    #log-table-wrap { overflow-x: auto; }
+    .empty-log { padding: 60px; text-align: center; font-family: var(--font-mono); font-size: 11px; color: var(--text-dim); letter-spacing: 2px; }
+  </style>
+</head>
+<body>
+<div class="app-shell">
+  <nav class="sidebar" id="sidebar"></nav>
+  <div class="main-content">
+    <div class="page-header">
+      <div>
+        <div class="page-title">EVENTS & ALERTS</div>
+        <div class="page-subtitle">DETECTION LOG & ALERT MANAGEMENT</div>
+      </div>
+      <div class="header-actions">
+        <span class="text-mono text-xs text-dim" id="log-count-label">—</span>
+        <button class="btn btn-ghost btn-sm" onclick="clearAll()">CLEAR LOG</button>
+        <button class="btn btn-primary btn-sm" onclick="TV.Alerts.acknowledgeAll(); renderAlerts();">ACK ALL</button>
+      </div>
+    </div>
+
+    <div class="page-body">
+      <div class="events-layout">
+        <!-- LOG -->
+        <div>
+          <div class="tab-bar">
+            <div class="tab active" id="tab-log" onclick="switchTab('log')">DETECTION LOG</div>
+            <div class="tab" id="tab-alerts" onclick="switchTab('alerts')">
+              ALERTS <span id="alert-count-tab" style="color:var(--accent-red)"></span>
+            </div>
+          </div>
+
+          <!-- Detection Log -->
+          <div id="pane-log">
+            <div class="filter-bar">
+              <div class="filter-chip active" data-filter="all" onclick="setFilter('all',this)">ALL</div>
+              <div class="filter-chip" data-filter="NONE" onclick="setFilter('NONE',this)">NONE</div>
+              <div class="filter-chip" data-filter="LOW" onclick="setFilter('LOW',this)">LOW</div>
+              <div class="filter-chip" data-filter="MEDIUM" onclick="setFilter('MEDIUM',this)">MEDIUM</div>
+              <div class="filter-chip" data-filter="HIGH" onclick="setFilter('HIGH',this)">HIGH</div>
+              <div class="filter-chip" data-filter="CRITICAL" onclick="setFilter('CRITICAL',this)">CRITICAL</div>
+            </div>
+            <div class="export-row">
+              <button class="btn btn-ghost btn-sm" onclick="exportCSV()">↓ EXPORT CSV</button>
+            </div>
+            <div id="log-table-wrap">
+              <div class="log-header">
+                <span>TIMESTAMP</span>
+                <span>CAMERA</span>
+                <span>THREAT</span>
+                <span>ENTITIES</span>
+                <span>COUNT</span>
+              </div>
+              <div id="log-rows"></div>
+            </div>
+          </div>
+
+          <!-- Alerts Pane -->
+          <div id="pane-alerts" style="display:none">
+            <div id="alerts-list"></div>
+          </div>
+        </div>
+
+        <!-- RIGHT PANEL -->
+        <div>
+          <div class="stats-mini">
+            <div class="mini-stat">
+              <div class="mini-stat-val text-cyan" id="ms-total">—</div>
+              <div class="mini-stat-lbl">TOTAL LOGS</div>
+            </div>
+            <div class="mini-stat">
+              <div class="mini-stat-val text-red" id="ms-alerts">—</div>
+              <div class="mini-stat-lbl">ALERTS</div>
+            </div>
+            <div class="mini-stat">
+              <div class="mini-stat-val text-amber" id="ms-high">—</div>
+              <div class="mini-stat-lbl">HIGH+</div>
+            </div>
+            <div class="mini-stat">
+              <div class="mini-stat-val text-green" id="ms-entities">—</div>
+              <div class="mini-stat-lbl">ENTITIES</div>
+            </div>
+          </div>
+
+          <!-- Top entities chart -->
+          <div class="panel mb-16">
+            <div class="panel-header"><span class="panel-title">TOP ENTITIES</span></div>
+            <div class="panel-body" style="padding:12px" id="top-entities"></div>
+          </div>
+
+          <!-- Camera breakdown -->
+          <div class="panel">
+            <div class="panel-header"><span class="panel-title">BY CAMERA</span></div>
+            <div class="panel-body" style="padding:12px" id="cam-breakdown"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/static/ThreatVision.js"></script>
+<script>
+  document.getElementById('sidebar').innerHTML = buildSidebar('events');
+
+  function buildSidebar(active) {
+    const alertCount = TV.Alerts.getCount();
+    const pages = [
+      { id:'dashboard', href:'/dashboard', icon:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="nav-icon"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>`, label:'Dashboard' },
+      { id:'cameras', href:'/cameras', icon:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="nav-icon"><path d="M15 10l4.553-2.069A1 1 0 0121 8.87v6.26a1 1 0 01-1.447.894L15 14M3 8a2 2 0 012-2h10a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z"/></svg>`, label:'Cameras' },
+      { id:'events', href:'/events', icon:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="nav-icon"><path d="M13 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>`, label:'Events', badge: alertCount > 0 ? alertCount : null },
+      { id:'analytics', href:'/analytics', icon:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="nav-icon"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>`, label:'Analytics' },
+    ];
+    return `
+      <div class="logo-area">
+        <div class="logo-icon">
+          <svg class="eye-svg" viewBox="0 0 32 32" fill="none">
+            <circle cx="16" cy="16" r="15" stroke="rgba(0,180,255,0.3)" stroke-width="1"/>
+            <path d="M3 16s5-9 13-9 13 9 13 9-5 9-13 9S3 16 3 16z" stroke="var(--accent-cyan)" stroke-width="1.5" fill="none"/>
+            <circle cx="16" cy="16" r="4" fill="var(--accent-cyan)" opacity="0.8"/>
+            <circle cx="16" cy="16" r="2" fill="white"/>
+          </svg>
+          <div><div class="logo-text">THREADVISION</div><div class="logo-sub">SURVEILLANCE SYSTEM</div></div>
+        </div>
+      </div>
+      <div class="system-status"><div class="status-dot"></div><span class="status-label">SYSTEM ONLINE</span></div>
+      <div class="nav-section">
+        <div class="nav-label">NAVIGATION</div>
+        ${pages.map(p => `<a href="${p.href}" class="nav-item ${p.id===active?'active':''}">
+          ${p.icon}${p.label}
+          ${p.badge?`<span class="nav-badge">${p.badge}</span>`:''}
+        </a>`).join('')}
+      </div>
+      <div class="sidebar-footer">
+        <div class="time-display" id="tv-clock">00:00:00</div>
+        <div class="date-display" id="tv-date">—</div>
+      </div>`;
+  }
+
+  let currentFilter = 'all';
+  let currentTab = 'log';
+
+  function switchTab(tab) {
+    currentTab = tab;
+    document.getElementById('pane-log').style.display = tab === 'log' ? 'block' : 'none';
+    document.getElementById('pane-alerts').style.display = tab === 'alerts' ? 'block' : 'none';
+    document.getElementById('tab-log').classList.toggle('active', tab === 'log');
+    document.getElementById('tab-alerts').classList.toggle('active', tab === 'alerts');
+  }
+
+  function setFilter(filter, el) {
+    currentFilter = filter;
+    document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+    el.classList.add('active');
+    renderLog();
+  }
+
+  function renderLog() {
+    const logs = TV.state.detectionLog.slice().reverse();
+    const filtered = currentFilter === 'all' ? logs : logs.filter(l => l.threatLabel === currentFilter);
+    const rows = document.getElementById('log-rows');
+
+    document.getElementById('log-count-label').textContent = `${filtered.length} ENTRIES`;
+
+    if (filtered.length === 0) {
+      rows.innerHTML = `<div class="empty-log">NO EVENTS MATCH FILTER</div>`;
+      return;
+    }
+
+    rows.innerHTML = filtered.map(e => {
+      const cls = e.threatLabel === 'CRITICAL' ? 'critical-threat' :
+                  (e.threatLabel === 'HIGH' ? 'high-threat' : '');
+      return `<div class="log-entry ${cls}">
+        <span style="color:var(--text-secondary)">${TV.UI.formatDateTime(e.timestamp)}</span>
+        <span style="color:var(--text-secondary)">${e.cameraName}</span>
+        <span>${TV.UI.threatBadge(e.threatScore, e.threatLabel)}</span>
+        <span style="color:var(--text-dim)">${e.entities.join(', ')}</span>
+        <span style="color:var(--text-secondary)">${e.entityCount}</span>
+      </div>`;
+    }).join('');
+  }
+
+  function renderAlerts() {
+    const alerts = TV.Alerts.getAll();
+    const list = document.getElementById('alerts-list');
+    const countEl = document.getElementById('alert-count-tab');
+    const unacked = TV.Alerts.getCount();
+    countEl.textContent = unacked > 0 ? `(${unacked})` : '';
+
+    if (alerts.length === 0) {
+      list.innerHTML = `<div class="empty-log">NO ALERTS RECORDED</div>`;
+      return;
+    }
+
+    list.innerHTML = alerts.map(a => `
+      <div class="alert-card ${a.acknowledged ? 'acked' : ''}">
+        <div class="alert-meta">
+          <span class="alert-time">${TV.UI.formatDateTime(a.timestamp)}</span>
+          ${TV.UI.threatBadge(a.threatScore, a.threatLabel)}
+        </div>
+        <div class="alert-cam">${a.cameraName}</div>
+        <div class="alert-entities">${a.entities.join(' · ')}</div>
+        ${!a.acknowledged ? `
+          <button class="btn btn-ghost btn-sm" style="margin-top:10px" onclick="ackAlert('${a.id}')">
+            ✓ ACKNOWLEDGE
+          </button>
+        ` : `<div style="font-family:var(--font-mono);font-size:9px;color:var(--text-dim);margin-top:8px;letter-spacing:1px">ACKNOWLEDGED</div>`}
+      </div>
+    `).join('');
+  }
+
+  function ackAlert(id) {
+    TV.Alerts.acknowledge(id);
+    renderAlerts();
+  }
+
+  function renderSidePanels() {
+    const logs = TV.state.detectionLog;
+    const alerts = TV.Alerts.getAll();
+    const highPlus = logs.filter(l => l.threatScore >= 0.6);
+    const allEntities = logs.flatMap(l => l.entities);
+    const totalDetections = TV.Camera.getAll().reduce((s,c)=>s+(c.totalDetections||0),0);
+
+    document.getElementById('ms-total').textContent = logs.length || '—';
+    document.getElementById('ms-alerts').textContent = alerts.length || '—';
+    document.getElementById('ms-high').textContent = highPlus.length || '—';
+    document.getElementById('ms-entities').textContent = totalDetections || '—';
+
+    // Top entities
+    const counts = {};
+    allEntities.forEach(e => { counts[e] = (counts[e]||0) + 1; });
+    const sorted = Object.entries(counts).sort((a,b)=>b[1]-a[1]).slice(0,6);
+    const maxCount = sorted[0]?.[1] || 1;
+
+    document.getElementById('top-entities').innerHTML = sorted.length === 0
+      ? `<div class="empty-state" style="padding:16px"><div class="empty-state-text">NO DATA</div></div>`
+      : sorted.map(([label, count]) => `
+          <div style="margin-bottom:10px">
+            <div style="display:flex;justify-content:space-between;font-family:var(--font-mono);font-size:10px;margin-bottom:4px">
+              <span style="color:var(--text-secondary)">${label}</span>
+              <span style="color:var(--text-dim)">${count}</span>
+            </div>
+            <div class="confidence-bar">
+              <div class="confidence-fill" style="width:${(count/maxCount*100).toFixed(0)}%;background:var(--accent-cyan)"></div>
+            </div>
+          </div>
+        `).join('');
+
+    // Camera breakdown
+    const camCounts = {};
+    logs.forEach(l => { camCounts[l.cameraName] = (camCounts[l.cameraName]||0) + 1; });
+    document.getElementById('cam-breakdown').innerHTML = Object.entries(camCounts).length === 0
+      ? `<div class="empty-state" style="padding:16px"><div class="empty-state-text">NO DATA</div></div>`
+      : Object.entries(camCounts).map(([name, count]) =>
+          `<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border-dim);font-family:var(--font-mono);font-size:11px">
+            <span style="color:var(--text-secondary)">${name}</span>
+            <span style="color:var(--accent-cyan)">${count} events</span>
+          </div>`
+        ).join('');
+  }
+
+  function exportCSV() {
+    const logs = TV.state.detectionLog;
+    if (!logs.length) { alert('No log data to export.'); return; }
+    const header = 'Timestamp,Camera,Threat Level,Threat Score,Entities,Count\n';
+    const rows = logs.map(l =>
+      `${l.timestamp},${l.cameraName},${l.threatLabel},${l.threatScore.toFixed(3)},"${l.entities.join('; ')}",${l.entityCount}`
+    ).join('\n');
+    const blob = new Blob([header + rows], { type: 'text/csv' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `threadvision_log_${new Date().toISOString().slice(0,10)}.csv`;
+    a.click();
+  }
+
+  function clearAll() {
+    if (!confirm('Clear all detection logs? Alerts and camera data will be preserved.')) return;
+    TV.state.detectionLog = [];
+    TV.Storage.save();
+    renderLog();
+    renderSidePanels();
+  }
+
+  // Initial render
+  renderLog();
+  renderAlerts();
+  renderSidePanels();
+
+  // Live update
+  setInterval(() => {
+    renderLog();
+    renderAlerts();
+    renderSidePanels();
+  }, 2000);
+
+  document.addEventListener('tv:detection', () => {
+    renderLog();
+    renderSidePanels();
+  });
+  document.addEventListener('tv:alert', () => {
+    renderAlerts();
+    renderSidePanels();
+  });
+</script>
+</body>
+</html>
