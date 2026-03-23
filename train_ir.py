@@ -4,46 +4,60 @@ import torch.optim as optim
 from IR_model import IRCNN
 from torch.utils.data import DataLoader
 from ir_dataset_loader import IRDataset
-dataset = IRDataset("ir_dataset")
+import os
 
-loader = DataLoader(dataset, batch_size=8, shuffle=True)
-# loader = DataLoader(
-#     dataset,
-#     batch_size=16,
-#     shuffle=True,
-#     num_workers=4,
-#     pin_memory=True
-# )
+def main():
+    dataset = IRDataset("ir_dataset_test1")
+    loader = DataLoader(
+        dataset,
+        batch_size=16,
+        shuffle=True,
+        num_workers=2,
+        pin_memory=True
+    )
 
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model = IRCNN().to(device)
+    model.train()
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    criterion = nn.CrossEntropyLoss()
+    optimizer = optim.Adam(model.parameters(), lr=0.001)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=2, verbose=True)
 
-model = IRCNN().to(device)
+    epochs = 10
+    best_loss = float("inf")
+    os.makedirs("models", exist_ok=True)
 
-criterion = nn.CrossEntropyLoss()
+    for epoch in range(epochs):
+        model.train()
+        epoch_loss = 0
 
-optimizer = optim.Adam(model.parameters(), lr=0.001)
+        for ir, labels in loader:
+            ir = ir.to(device)
+            labels = labels.to(device)
 
-epochs = 10
+            optimizer.zero_grad()        # ← fixed: moved before forward pass
+            outputs = model(ir)
+            loss = criterion(outputs, labels)
+            loss.backward()
+            optimizer.step()
 
-for epoch in range(epochs):
+            epoch_loss += loss.item()
 
-    for ir, labels in loader:
+        avg_loss = epoch_loss / len(loader)
+        print(f"Epoch {epoch+1}/{epochs}, Loss: {avg_loss:.4f}")
 
-        ir = ir.to(device)
-        labels = labels.to(device)
+        scheduler.step(avg_loss)
 
-        outputs = model(ir)
+        # Save best model checkpoint
+        if avg_loss < best_loss:
+            best_loss = avg_loss
+            torch.save(model.state_dict(), "models/ir_model_best.pth")
+            print(f"  → Best model saved (loss: {best_loss:.4f})")
 
-        loss = criterion(outputs, labels)
+    # Save final model
+    torch.save(model.state_dict(), "models/ir_model_2.pth")
+    print("IR model saved.")
 
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
-
-    print(f"Epoch {epoch+1}, Loss: {loss.item():.4f}")
-
-
-torch.save(model.state_dict(), "models/ir_model.pth")
-
-print("IR model saved.")
+if __name__ == "__main__":
+    main()
