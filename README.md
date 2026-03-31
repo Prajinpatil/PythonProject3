@@ -61,5 +61,11 @@ pip install -r requirements.txt
 * OpenCV  
 * NumPy  
 
+## Model Weights
+
+Due to size limitations, the trained model is not included in this repository.
+
+Download here: <https://drive.google.com/file/d/1CxoNrmRn88vt7wJOm4_HAG85yLPoN3K4/view?usp=sharing>
+
 Author:-  
 Prajin Patil
